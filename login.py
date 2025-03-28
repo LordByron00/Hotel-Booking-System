@@ -9,7 +9,7 @@ try:
     conn = mysql.connector.connect(
         host="localhost",
         user="root",
-        password="",  
+        password="justbayr@1006",  
         database="hotel_booking",
         port=3306
     )
@@ -18,25 +18,25 @@ except mysql.connector.Error as e:
     print(f"Error connecting to MySQL: {e}")
     exit()
 
-# Create users table if it doesn't exist
-c.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        userID INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(50) UNIQUE,
-        email VARCHAR(100) UNIQUE,
-        password VARCHAR(255),
-        role VARCHAR(20) DEFAULT 'customer'
-    )
-""")
-conn.commit()
+# # Create users table if it doesn't exist
+# c.execute("""
+#     CREATE TABLE IF NOT EXISTS users (
+#         userID INT AUTO_INCREMENT PRIMARY KEY,
+#         username VARCHAR(50) UNIQUE,
+#         email VARCHAR(100) UNIQUE,
+#         password VARCHAR(255),
+#         role VARCHAR(20) DEFAULT 'customer'
+#     )
+# """)
+# conn.commit()
 
 # Create default admin user if it doesn't exist
-c.execute("SELECT * FROM users WHERE email = %s", ("admin@gmail.com",))
+c.execute("SELECT * FROM users WHERE email = %s", ("j.bayron.538021@umindanao.edu.ph",))
 if not c.fetchone():
-    password = "admin123".encode('utf-8')
+    password = "bayron123".encode('utf-8')
     hashed = bcrypt.hashpw(password, bcrypt.gensalt()).decode('utf-8')
-    c.execute("INSERT INTO users (username, email, password, role) VALUES (%s, %s, %s, %s)",
-              ("Admin", "admin@gmail.com", hashed, "admin"))
+    c.execute("INSERT INTO users (firstName, lastName, email, password, phone, role) VALUES (%s, %s, %s, %s, %s, %s)",
+              ("Justine", "Bayron", "j.bayron.538021@umindanao.edu.ph", hashed, "093029230230", "admin"))
     conn.commit()
     print("Default admin user created: email=admin@gmail.com, password=admin123")
 
@@ -54,7 +54,7 @@ def login():
         messagebox.showerror("Error", "Please enter both email and password")
         return
 
-    c.execute("SELECT userID, username, password, role FROM users WHERE email=%s", (email,))
+    c.execute("SELECT userID, firstName, password, role FROM users WHERE email=%s", (email,))
     user = c.fetchone()
 
     if user:
@@ -186,7 +186,7 @@ def register_window():
 
     register_btn = tk.Button(reg_frame, text="Register", font=("Helvetica", 12, "bold"), 
                              bg="#3498db", fg="white", bd=0, width=20, height=2,
-                             command=lambda: register_user(reg_root, reg_username_entry, reg_email_entry, reg_password_entry))
+                             command=lambda: register_user(reg_root, reg_username_entry, reg_lastname_entry, reg_email_entry, reg_password_entry, reg_phone_entry))
     register_btn.pack(pady=15)
     register_btn.bind("<Enter>", on_register_enter)
     register_btn.bind("<Leave>", on_register_leave)
@@ -206,24 +206,26 @@ def register_window():
 
     reg_root.mainloop()
 
-def register_user(reg_root, reg_username_entry, reg_email_entry, reg_password_entry):
+def register_user(reg_root, reg_username_entry, reg_lastname_entry, reg_email_entry, reg_password_entry, reg_phone_entry):
     username = reg_username_entry.get().strip()
+    lastname = reg_lastname_entry.get().strip()
     email = reg_email_entry.get().strip()
     password = reg_password_entry.get().strip()
+    phone = reg_phone_entry.get().strip()
     role = "customer"
     
     if not all([username, email, password]) or username == "Enter your username" or email == "Enter your email" or password == "Enter your password":
         messagebox.showerror("Error", "Please fill in all fields")
         return
     
-    c.execute("SELECT * FROM users WHERE username=%s OR email=%s", (username, email))
+    c.execute("SELECT * FROM users WHERE email=%s", (email))
     if c.fetchone():
-        messagebox.showerror("Error", "Username or email already exists")
+        messagebox.showerror("Error", "Email already exists")
         return
     
     hashed_password = hash_password(password)
     try:
-        c.execute("INSERT INTO users (username, email, password, role) VALUES (%s, %s, %s, %s)", 
+        c.execute("INSERT INTO users (firstName, lastName, email, password, phone, role) VALUES (%s, %s, %s, %s, %s, %s)", 
                  (username, email, hashed_password, role))
         conn.commit()
         messagebox.showinfo("Success", "Account Created Successfully")
