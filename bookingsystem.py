@@ -2,14 +2,14 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import mysql.connector
 from datetime import datetime
-import login 
+import login
 
 # Database Connection
 try:
     conn = mysql.connector.connect(
         host="localhost",
         user="root",
-        password="justbayr@1006",
+        password="",
         database="hotel_booking",
         port=3306
     )
@@ -60,7 +60,7 @@ def initialize_database():
         """)
         c.execute("""
             INSERT IGNORE INTO room_types (typeName, basePrice) 
-            VALUES ('Single', 100.00), ('Double', 150.00), ('Suite', 250.00)
+            VALUES ('Single', 1000.00), ('Double', 2000.00), ('Suite', 2700.00)
         """)
         c.execute("""
             INSERT IGNORE INTO rooms (roomTypeID, roomNumber) 
@@ -108,7 +108,7 @@ def calculate_total_amount(room_type, check_in, check_out):
     return 0
 
 # Customer Booking Functions
-def add_booking(user_id, username):
+def add_booking(user_id, full_name):
     room_type = room_type_var.get().strip()
     check_in = check_in_entry.get().strip()
     check_out = check_out_entry.get().strip()
@@ -147,7 +147,6 @@ def add_booking(user_id, username):
         """, (user_id, room_id, check_in, check_out, 'pending', total_amount))
         conn.commit()
         
-        # Add transaction with selected payment method
         booking_id = c.lastrowid
         c.execute("""
             INSERT INTO transactions (bookingID, amount, transactionDate, paymentMethod, status)
@@ -262,22 +261,21 @@ def auto_refresh_bookings(user_id, booking_root):
     show_bookings(user_id)
     booking_root.after(5000, lambda: auto_refresh_bookings(user_id, booking_root)) 
 
-def open_booking_system(user_id, username):
+def open_booking_system(user_id, full_name):
     global name_entry, check_in_entry, check_out_entry, room_type_var, payment_method_var, booking_table
 
     initialize_database()
 
     booking_root = tk.Tk()
-    booking_root.title(f"Hotel Booking System - Welcome, {username}")
+    booking_root.title(f"Hotel Booking System - Welcome, {full_name}")
     booking_root.state('zoomed')
 
-    # Input Frame
     input_frame = tk.LabelFrame(booking_root, text="Booking", padx=10, pady=10)
     input_frame.pack(padx=20, pady=10, fill="x")
 
     tk.Label(input_frame, text="Guest Name:").grid(row=0, column=0, pady=5, padx=10, sticky="w")
     name_entry = tk.Entry(input_frame, width=30)
-    name_entry.insert(0, username)
+    name_entry.insert(0, full_name)
     name_entry.config(state='disabled')
     name_entry.grid(row=0, column=1, pady=5, padx=10)
 
@@ -302,17 +300,15 @@ def open_booking_system(user_id, username):
     payment_method_dropdown = ttk.Combobox(input_frame, textvariable=payment_method_var, values=payment_methods)
     payment_method_dropdown.grid(row=4, column=1, pady=5, padx=10)
 
-    # Buttons Frame
     button_frame = tk.Frame(input_frame)
     button_frame.grid(row=5, column=0, columnspan=2, pady=10)
-    tk.Button(button_frame, text="Add Booking", command=lambda: add_booking(user_id, username), 
+    tk.Button(button_frame, text="Add Booking", command=lambda: add_booking(user_id, full_name), 
              bg="#4682B4", fg="white").pack(side=tk.LEFT, padx=5)
     tk.Button(button_frame, text="Update Booking", command=lambda: update_booking(user_id),
              bg="#32CD32", fg="white").pack(side=tk.LEFT, padx=5)
     tk.Button(button_frame, text="Cancel Booking", command=lambda: cancel_booking(user_id),
              bg="#FFA500", fg="white").pack(side=tk.LEFT, padx=5)
 
-    # Bookings Table
     columns = ("ID", "User ID", "Room Type", "Room Number", "Check-in", "Check-out", "Status", "Amount")
     booking_table = ttk.Treeview(booking_root, columns=columns, show="headings", height=15)
     for col in columns:
@@ -321,7 +317,6 @@ def open_booking_system(user_id, username):
     booking_table.pack(fill="both", expand=True, padx=20, pady=10)
     booking_table.bind('<<TreeviewSelect>>', select_booking)
 
-    # Logout Button with Confirmation
     def logout():
         if messagebox.askyesno("Confirm Logout", "Are you sure you want to log out?"):
             booking_root.destroy()
@@ -339,16 +334,79 @@ def show_customers(customer_table):
     for item in customer_table.get_children():
         customer_table.delete(item)
 
-    c.execute("SELECT userID, username, email, role FROM users")
+    c.execute("SELECT userID, first_name, last_name, email, contact_number, role, status FROM users")
     for row in c.fetchall():
         customer_table.insert("", "end", values=row)
+
+def update_customer(customer_table, first_name_entry, last_name_entry, email_entry, contact_entry):
+    selected = customer_table.selection()
+    if not selected:
+        messagebox.showerror("Error", "Please select a customer to update")
+        return
+    
+    user_id = customer_table.item(selected[0])['values'][0]
+    first_name = first_name_entry.get().strip()
+    last_name = last_name_entry.get().strip()
+    email = email_entry.get().strip()
+    contact_number = contact_entry.get().strip()
+
+    if not all([first_name, last_name, email, contact_number]):
+        messagebox.showerror("Error", "Please fill in all fields")
+        return
+
+    try:
+        c.execute("""
+            UPDATE users 
+            SET first_name = %s, last_name = %s, email = %s, contact_number = %s
+            WHERE userID = %s
+        """, (first_name, last_name, email, contact_number, user_id))
+        conn.commit()
+        messagebox.showinfo("Success", "Customer updated successfully")
+        show_customers(customer_table)
+    except mysql.connector.Error as e:
+        messagebox.showerror("Error", f"Update failed: {e}")
+
+def delete_customer(customer_table):
+    selected = customer_table.selection()
+    if not selected:
+        messagebox.showerror("Error", "Please select a customer to delete")
+        return
+    
+    user_id = customer_table.item(selected[0])['values'][0]
+    if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this customer?"):
+        try:
+            c.execute("DELETE FROM transactions WHERE bookingID IN (SELECT bookingID FROM bookings WHERE userID = %s)", (user_id,))
+            c.execute("DELETE FROM bookings WHERE userID = %s", (user_id,))
+            c.execute("DELETE FROM users WHERE userID = %s", (user_id,))
+            conn.commit()
+            messagebox.showinfo("Success", "Customer deleted successfully")
+            show_customers(customer_table)
+        except mysql.connector.Error as e:
+            messagebox.showerror("Error", f"Delete failed: {e}")
+
+def block_unblock_customer(customer_table, action):
+    selected = customer_table.selection()
+    if not selected:
+        messagebox.showerror("Error", "Please select a customer to block/unblock")
+        return
+    
+    user_id = customer_table.item(selected[0])['values'][0]
+    new_status = 'blocked' if action == 'block' else 'active'
+    
+    try:
+        c.execute("UPDATE users SET status = %s WHERE userID = %s", (new_status, user_id))
+        conn.commit()
+        messagebox.showinfo("Success", f"Customer {new_status} successfully")
+        show_customers(customer_table)
+    except mysql.connector.Error as e:
+        messagebox.showerror("Error", f"Action failed: {e}")
 
 def show_all_bookings(booking_table):
     for item in booking_table.get_children():
         booking_table.delete(item)
 
     c.execute("""
-        SELECT b.bookingID, u.username, rt.typeName, r.roomNumber, 
+        SELECT b.bookingID, CONCAT(u.first_name, ' ', u.last_name), rt.typeName, r.roomNumber, 
                b.checkInDate, b.checkOutDate, b.status, b.totalAmount 
         FROM bookings b 
         JOIN rooms r ON b.roomID = r.roomID 
@@ -364,7 +422,7 @@ def show_reservations(reservation_table):
         reservation_table.delete(item)
 
     c.execute("""
-        SELECT b.bookingID, u.username, rt.typeName, r.roomNumber, 
+        SELECT b.bookingID, CONCAT(u.first_name, ' ', u.last_name), rt.typeName, r.roomNumber, 
                b.checkInDate, b.checkOutDate, b.status, b.totalAmount 
         FROM bookings b 
         JOIN rooms r ON b.roomID = r.roomID 
@@ -381,7 +439,7 @@ def show_transactions(transaction_table):
         transaction_table.delete(item)
 
     c.execute("""
-        SELECT t.transactionID, b.bookingID, u.username, t.amount, 
+        SELECT t.transactionID, b.bookingID, CONCAT(u.first_name, ' ', u.last_name), t.amount, 
                t.transactionDate, t.paymentMethod, t.status
         FROM transactions t
         JOIN bookings b ON t.bookingID = b.bookingID
@@ -427,14 +485,13 @@ def delete_booking_admin(booking_table):
         except mysql.connector.Error as e:
             messagebox.showerror("Error", f"Delete failed: {e}")
 
-def open_admin_system(user_id, username):
+def open_admin_system(user_id, full_name):
     initialize_database()
 
     admin_root = tk.Tk()
-    admin_root.title(f"Admin Dashboard - Welcome, {username}")
+    admin_root.title(f"Admin Dashboard - Welcome, {full_name}")
     admin_root.state('zoomed')
 
-    # Notebook Tab
     notebook = ttk.Notebook(admin_root)
     notebook.pack(fill="both", expand=True, padx=20, pady=10)
 
@@ -442,18 +499,66 @@ def open_admin_system(user_id, username):
     customers_frame = ttk.Frame(notebook)
     notebook.add(customers_frame, text="Customers")
 
-    customer_columns = ("ID", "Username", "Email", "Role")
-    customer_table = ttk.Treeview(customers_frame, columns=customer_columns, show="headings", height=20)
+    customer_form_frame = tk.LabelFrame(customers_frame, text="Update Customer", padx=10, pady=10)
+    customer_form_frame.pack(padx=20, pady=10, fill="x")
+
+    tk.Label(customer_form_frame, text="First Name:").grid(row=0, column=0, pady=5, padx=10, sticky="w")
+    first_name_entry = tk.Entry(customer_form_frame, width=30)
+    first_name_entry.grid(row=0, column=1, pady=5, padx=10)
+
+    tk.Label(customer_form_frame, text="Last Name:").grid(row=1, column=0, pady=5, padx=10, sticky="w")
+    last_name_entry = tk.Entry(customer_form_frame, width=30)
+    last_name_entry.grid(row=1, column=1, pady=5, padx=10)
+
+    tk.Label(customer_form_frame, text="Email:").grid(row=2, column=0, pady=5, padx=10, sticky="w")
+    email_entry = tk.Entry(customer_form_frame, width=30)
+    email_entry.grid(row=2, column=1, pady=5, padx=10)
+
+    tk.Label(customer_form_frame, text="Contact Number:").grid(row=3, column=0, pady=5, padx=10, sticky="w")
+    contact_entry = tk.Entry(customer_form_frame, width=30)
+    contact_entry.grid(row=3, column=1, pady=5, padx=10)
+
+    button_frame = tk.Frame(customer_form_frame)
+    button_frame.grid(row=4, column=0, columnspan=2, pady=10)
+    tk.Button(button_frame, text="Update Customer", 
+             command=lambda: update_customer(customer_table, first_name_entry, last_name_entry, email_entry, contact_entry),
+             bg="#32CD32", fg="white").pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="Delete Customer", 
+             command=lambda: delete_customer(customer_table),
+             bg="#FF4444", fg="white").pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="Block Customer", 
+             command=lambda: block_unblock_customer(customer_table, 'block'),
+             bg="#FFA500", fg="white").pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="Unblock Customer", 
+             command=lambda: block_unblock_customer(customer_table, 'unblock'),
+             bg="#4682B4", fg="white").pack(side=tk.LEFT, padx=5)
+
+    customer_columns = ("ID", "First Name", "Last Name", "Email", "Contact Number", "Role", "Status")
+    customer_table = ttk.Treeview(customers_frame, columns=customer_columns, show="headings", height=15)
     for col in customer_columns:
         customer_table.heading(col, text=col)
         customer_table.column(col, anchor="center", width=150)
     customer_table.pack(fill="both", expand=True, padx=20, pady=10)
 
+    def select_customer(event):
+        selected = customer_table.selection()
+        if selected:
+            customer = customer_table.item(selected[0])['values']
+            first_name_entry.delete(0, tk.END)
+            first_name_entry.insert(0, customer[1])
+            last_name_entry.delete(0, tk.END)
+            last_name_entry.insert(0, customer[2])
+            email_entry.delete(0, tk.END)
+            email_entry.insert(0, customer[3])
+            contact_entry.delete(0, tk.END)
+            contact_entry.insert(0, customer[4])
+
+    customer_table.bind('<<TreeviewSelect>>', select_customer)
+
     # Bookings Tab
     bookings_frame = ttk.Frame(notebook)
     notebook.add(bookings_frame, text="Bookings")
 
-    # Status Update Form
     status_form_frame = tk.LabelFrame(bookings_frame, text="Update Status", padx=10, pady=10)
     status_form_frame.pack(padx=20, pady=10, fill="x")
 
@@ -501,7 +606,6 @@ def open_admin_system(user_id, username):
         transaction_table.column(col, anchor="center", width=150)
     transaction_table.pack(fill="both", expand=True, padx=20, pady=10)
 
-    # Logout Button with Confirmation
     def logout():
         if messagebox.askyesno("Confirm Logout", "Are you sure you want to log out?"):
             admin_root.destroy()
@@ -510,7 +614,6 @@ def open_admin_system(user_id, username):
     tk.Button(admin_root, text="Logout", command=logout,
              bg="red", fg="white").pack(pady=10)
 
-    # Populate Tables
     show_customers(customer_table)
     show_all_bookings(booking_table)
     show_reservations(reservation_table)
