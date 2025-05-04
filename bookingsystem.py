@@ -3,6 +3,8 @@ from tkinter import messagebox, ttk
 import mysql.connector
 from datetime import datetime
 import login
+import webview
+import threading
 
 # Database Connection
 try:
@@ -317,6 +319,17 @@ def open_booking_system(user_id, full_name):
     booking_table.pack(fill="both", expand=True, padx=20, pady=10)
     booking_table.bind('<<TreeviewSelect>>', select_booking)
 
+    specs_btn = tk.Button(booking_root, 
+                         text="View Room Specifications",
+                         font=("Helvetica", 10, "bold"),
+                         bg="#4CAF50",
+                         fg="white",
+                         bd=0,
+                         padx=10,
+                         pady=5,
+                         command=show_room_specs)
+    specs_btn.pack(pady=10)
+
     def logout():
         if messagebox.askyesno("Confirm Logout", "Are you sure you want to log out?"):
             booking_root.destroy()
@@ -485,12 +498,52 @@ def delete_booking_admin(booking_table):
         except mysql.connector.Error as e:
             messagebox.showerror("Error", f"Delete failed: {e}")
 
+def show_room_specs():
+    url = "http://127.0.0.1:3000/home/index"
+    window = webview.create_window('Room Specifications', 
+                                 url,
+                                 width=800, 
+                                 height=600,
+                                 resizable=True,
+                                 fullscreen=False,
+                                 min_size=(400, 300))
+    window.events.loaded += lambda: window.evaluate_js(
+        """
+        // Disable right-click
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        
+        // Disable keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && 
+                (e.key === 'l' || e.key === 'L' || e.key === 'F5')) {
+                e.preventDefault();
+            }
+        });
+        """
+    )
+    webview.start(debug=False)
+
 def open_admin_system(user_id, full_name):
     initialize_database()
 
     admin_root = tk.Tk()
     admin_root.title(f"Admin Dashboard - Welcome, {full_name}")
     admin_root.state('zoomed')
+
+    # Add this button frame before the notebook
+    top_button_frame = tk.Frame(admin_root)
+    top_button_frame.pack(fill="x", padx=20, pady=5)
+
+    specs_btn = tk.Button(top_button_frame, 
+                         text="View Room Specifications",
+                         font=("Helvetica", 10, "bold"),
+                         bg="#4CAF50",
+                         fg="white",
+                         bd=0,
+                         padx=10,
+                         pady=5,
+                         command=show_room_specs)
+    specs_btn.pack(side=tk.RIGHT)
 
     notebook = ttk.Notebook(admin_root)
     notebook.pack(fill="both", expand=True, padx=20, pady=10)
@@ -565,7 +618,7 @@ def open_admin_system(user_id, full_name):
     tk.Label(status_form_frame, text="Status:").grid(row=0, column=0, pady=5, padx=10, sticky="w")
     status_var = tk.StringVar(value="pending")
     status_options = ["pending", "confirmed", "cancelled"]
-    status_dropdown = ttk.Combobox(status_form_frame, textvariable=status_var, values=status_options)
+    status_dropdown = ttk.Combobox(status_form_frame, textvariable=status_var, values=status_options, state="readonly")
     status_dropdown.grid(row=0, column=1, pady=5, padx=10)
 
     button_frame = tk.Frame(status_form_frame)
@@ -605,6 +658,17 @@ def open_admin_system(user_id, full_name):
         transaction_table.heading(col, text=col)
         transaction_table.column(col, anchor="center", width=150)
     transaction_table.pack(fill="both", expand=True, padx=20, pady=10)
+
+    specs_btn = tk.Button(transactions_frame, 
+                         text="View Room Specifications",
+                         font=("Helvetica", 10, "bold"),
+                         bg="#4CAF50",
+                         fg="white",
+                         bd=0,
+                         padx=10,
+                         pady=5,
+                         command=show_room_specs)
+    specs_btn.pack(pady=10)
 
     def logout():
         if messagebox.askyesno("Confirm Logout", "Are you sure you want to log out?"):

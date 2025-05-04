@@ -33,7 +33,6 @@ c.execute("""
 """)
 conn.commit()
 
-# Create default admin user if it doesn't exist
 c.execute("SELECT * FROM users WHERE email = %s", ("admin@gmail.com",))
 if not c.fetchone():
     password = "admin123".encode('utf-8')
